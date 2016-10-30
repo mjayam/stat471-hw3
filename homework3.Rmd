@@ -65,8 +65,6 @@ plot(reg.sum$adjr2, xlab="Number of predictors", ylab="adjr2", col="red", type="
 As seen by the plots, we would use a 2-variable model with Cp, a 2-variable model with BIC, and a 2-variable model with Adjusted R^2.
 ```{r}
 coef(regsub, id=2)
- ## (Intercept) poly(x, degree = 10, raw = TRUE)2 poly(x, degree = 10, raw = TRUE)3 
- ## -2.0710776                         0.9642645                         5.0163042 
 ```
 The model will use x^2 and x^3.
 
@@ -86,8 +84,6 @@ plot(reg.sum.f$bic, xlab="Number of predictors", ylab="BIC", col="red", type="p"
 plot(reg.sum.f$adjr2, xlab="Number of predictors", ylab="adjr2", col="red", type="p", pch=16) # exhibit 6
 
 coef(regsub.f, id=2)
- ## (Intercept) poly(x, degree = 10, raw = TRUE)2 poly(x, degree = 10, raw = TRUE)3 
- ## -2.0710776                         0.9642645                         5.0163042 
 ```
 For forward selection, we see the same reults as in part c.
 Now, we will do backward selection:
@@ -104,8 +100,6 @@ plot(reg.sum.f$bic, xlab="Number of predictors", ylab="BIC", col="red", type="p"
 plot(reg.sum.f$adjr2, xlab="Number of predictors", ylab="adjr2", col="red", type="p", pch=16) # exhibit 9
 
 coef(regsub.b, id=2)
- ## (Intercept) poly(x, degree = 10, raw = TRUE)2 poly(x, degree = 10, raw = TRUE)3 
- ## -2.0710776                         0.9642645                         5.0163042 
 ```
 Again, we see the same model and values.
 
@@ -124,19 +118,6 @@ lambda.final <- lasso.cv$lambda.min # 0.05631109
 beta <- coef(lasso.cv, s=lambda.final)
 beta <- as.matrix(beta)
 beta
-
- #                                                1
- #  (Intercept)                        -1.9625901145
- #  poly(x, degree = 10, raw = TRUE)1   0.0056439028
- #  poly(x, degree = 10, raw = TRUE)2   0.7397802716
- #  poly(x, degree = 10, raw = TRUE)3   4.9391488225
- #  poly(x, degree = 10, raw = TRUE)4   0.0361210858
- #  poly(x, degree = 10, raw = TRUE)5   0.0041259611
- #  poly(x, degree = 10, raw = TRUE)6   0.0000000000
- #  poly(x, degree = 10, raw = TRUE)7   0.0000000000
- #  poly(x, degree = 10, raw = TRUE)8   0.0000000000
- #  poly(x, degree = 10, raw = TRUE)9   0.0003331596
- #  poly(x, degree = 10, raw = TRUE)10  0.0000000000
 ```
 Using the LASSO method, the model picks x, x^2, x^3, x^4, x^5, x^9. The coefficients fo x^9, x, and x^5 are more negligible than the others.
 
@@ -156,8 +137,6 @@ which.min(reg.sum.partf$bic)      # 1
 which.max(reg.sum.partf$adjr2)    # 1
 
 coef(regsub.partf, id=1)
- # (Intercept) poly(x, degree = 10, raw = TRUE)7 
- # -2.095239                          6.999867 
 ```
 All three methods chose one-variable models.
 Now, using LASSO:
@@ -172,19 +151,6 @@ lambda.final.f <- lasso.cv.f$lambda.min # 10.43878
 beta <- coef(lasso.cv.f, s=lambda.final.f)
 beta <- as.matrix(beta)
 beta
-
- #                                            1
- # (Intercept)                        -2.561234
- # poly(x, degree = 10, raw = TRUE)1   0.000000
- # poly(x, degree = 10, raw = TRUE)2   0.000000
- # poly(x, degree = 10, raw = TRUE)3   0.000000
- # poly(x, degree = 10, raw = TRUE)4   0.000000
- # poly(x, degree = 10, raw = TRUE)5   0.000000
- # poly(x, degree = 10, raw = TRUE)6   0.000000
- # poly(x, degree = 10, raw = TRUE)7   6.775923
- # poly(x, degree = 10, raw = TRUE)8   0.000000
- # poly(x, degree = 10, raw = TRUE)9   0.000000
- # poly(x, degree = 10, raw = TRUE)10  0.000000
 ```
 Using LASSO, the model selected is also a one-variable model.
 
