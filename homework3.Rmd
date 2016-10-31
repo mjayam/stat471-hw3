@@ -155,3 +155,246 @@ beta
 Using LASSO, the model selected is also a one-variable model.
 
 # Problem 2
+
+## Part 1 - Data Summary & Inspection
+
+```{r, , message=F, warning=F}
+# Library imports
+library(dplyr)
+library(ggplot2)
+library(mapproj)
+library(viridis)
+# Import the crime data set
+crime.data <- read.csv("CrimeData.csv", header=T, na.string=c("", "?"))
+dim(crime.data)
+```
+
+We use the example code (provided below) from the file "Rcode_CrimeRate_Summary_dplyr_heatmap.r", for preprocessing data and drawing heatmaps.
+
+```{r}
+preprocessing <- function (data) {
+  # Preprocess the data for plotting the heatmap 
+  #
+  # Args:
+  #   data: data with two columns including the abbre of states 
+  #         along with the corresponding target number
+  #
+  # Returns:
+  #   Add standard state name with state coordination
+  
+  # standard state name to match with mapdata
+  data$region <- tolower(state.name[match(data$state,state.abb)])
+  
+  # state coordination, i.e. latitutde and longitude
+  data$center_lat  <- state.center$x[match(data$state, state.abb)]
+  data$center_long <- state.center$y[match(data$state, state.abb)]
+
+  data
+}
+
+plot.heatmap <- function(data, mapdata, target) {
+  # Plot out the heatmap 
+  #
+  # Args:
+  #   data: data of standard state name and coordination with corresponding 
+  #         target data
+  #   mapdata: mapdata following the format of map_data in ggplot
+  #   target: name of the target
+  #
+  # Returns:
+  #   The heatmap of the target
+  
+  data <- preprocessing(data)
+  
+  # merge the data with the map
+  map <- merge(mapdata, data, sort=FALSE, by="region", all.x=TRUE)
+  map <- map[order(map$order),]
+  
+  # calculate the target range
+  min <- eval(parse(text=paste("min(data$", target,")")))
+  min_digits <- unlist(strsplit(as.character(floor(min)), ""))
+  min_range <- as.numeric(min_digits[1]) * 10^(length(min_digits)-1)
+
+  max <- eval(parse(text=paste("max(data$", target, ")")))
+  max_range <- round(max, -floor(log10(max)))
+   
+  # plot the map 
+  heapmap <- ggplot(map, aes(x=long, y=lat, group=group))
+  heapmap <- heapmap + eval(parse(text=paste("geom_polygon(aes(fill=", target,"))")))
+  heapmap <- heapmap + geom_path()
+  heapmap <- heapmap + geom_text(data=data, aes(x=center_lat, y=center_long, group=NA, label=state, size=2))
+  legend_name <- target
+  heapmap <- heapmap + scale_fill_continuous(limits=c(min_range, max_range), name=target)
+  # you can specify the color by the Hex Color Code
+  # heapmap <- heapmap + scale_fill_gradient(low="#0099CC", high="#003366")
+  heapmap <- heapmap + scale_fill_viridis()
+  # heapmap <- heapmap + scale_fill_viridis(option="magma")
+  heapmap
+}
+```
+
+We can now process the input data and plot a heatmap for our two selected variables of interest: mean percentage unemployed and mean percentage of the population under poverty.
+We create a dataframe to encapsulate these variables from the original data source and use aggregated data to create heatmaps. We also retain in a summarized crime rate field, as calculated in the example code, for later reference.
+
+```{r}
+data.s <- summarize(group_by(crime.data, state), 
+            mean.pct.unemployed=mean(pct.unemployed), 
+            mean.pct.pop.underpov=mean(pct.pop.underpov),
+            crime.rate=mean(violentcrimes.perpop, na.rm=TRUE), #ignore the missing values
+            n=n())
+# mapdata
+states <- map_data("state") 
+
+# Plot of crime rate
+crime.rate <- data.s[, c("state", "crime.rate")]
+plot.heatmap(crime.rate, states, "crime.rate")
+```
+
+With this information in mind, we can now plot our two variables of interest.
+
+```{r, warning=F}
+# warnings suppressed
+# Plotting mean percentage unemployed
+pct.unemployed <- data.s[, c("state", "mean.pct.unemployed")]
+pct.unemployed
+
+plot.heatmap(pct.unemployed, states, "mean.pct.unemployed")
+
+# Plotting mean population under poverty
+pct.pop.underpov <- data.s[, c("state", "mean.pct.pop.underpov")]
+pct.pop.underpov
+
+plot.heatmap(pct.pop.underpov, states, "mean.pct.pop.underpov")
+
+```
+
+
+### Observations
+Mean Percentage Unemployed: We can see a relatively strong relationship between crime rate and mean percent unemployed based on the data in the heatmap. However, this may not be an accurate isolated predictor of crime rate, given the large variety of factors that can affect it in the real world. There are states like South Carolina and Minnesota for instance where we can see that the values for percent unemployed and crime rate are not correlated.
+
+Mean Percentage Under Poverty: This heatmap is very strongly correlated to the values displayed for crime rate, as would be expected - areas under the natural rate of poverty in the country are prone to higher crime rates. As with unemployment however, there are exceptions to this matching, like the state of Idaho which has a high percent of population under poverty, but a relatively low crime rate.
+
+
+## Part 2 - Analysis with LASSO and Elasticnet
+
+Before we proceed with the analysis, as done in lecture, we remove redudant variables from the data set (which can be calculated later if needed). We finally combine clean data for only the states of FL and CA.
+
+```{r}
+# remove variables about police departments because of large number of missing values
+data1 <- crime.data[,c(2,6:103,121,122,123, 130:147)]
+
+# remove redudant variables (only need one of num.X and pct.X for instance)
+var_names_out <- c("num.urban","other.percap", "num.underpov",
+                   "num.vacant.house","num.murders","num.rapes",
+                   "num.robberies", "num.assaults", "num.burglaries",
+                   "num.larcenies", "num.autothefts", "num.arsons")
+
+data1 <- data1[!(names(data1) %in% var_names_out)] # take some redundant var's out
+
+# remove variables that can be recalculated when needed
+names_other_crimes <- c( "murder.perpop", "rapes.perpop",                   
+                        "robberies.perpop",  "assaults.perpop",                
+                        "burglaries.perpop", "larcenies.perpop",               
+                        "autothefts.perpop", "arsons.perpop",                  
+                         "nonviolentcrimes.perpop")
+# Take other crimes out
+data2 <- data1[!(names(data1) %in% names_other_crimes)] # take other crimes out. 
+
+
+# Lastly, we combine information for the states of FL and CA only
+data.fl <- data2[data2$state=="FL",-1] # take state column out
+data.ca <- data2[data2$state=="CA",-1]
+
+# Combined data ready!
+comb.data <- rbind(data.fl, data.ca)
+```
+
+Now we can proceed to generate a LASSO model.
+
+```{r}
+comb.data <- comb.data[complete.cases(comb.data),]
+
+# X variables as a categorical matrix
+X2 <- model.matrix(violentcrimes.perpop~., comb.data)[,-1]  
+
+# response variable
+Y2 <- comb.data$violentcrimes.perpop
+
+# alpha set close to 1, with 10 folds of cross-validation
+fit2.cv <- cv.glmnet(X2, Y2, alpha=1, nfolds=10) 
+plot(fit2.cv)
+
+# extract betas coefficients values for lambda.1se (fewer number of variables in the model for simplicity)
+coef.1se <- coef(fit2.cv, s="lambda.1se")  
+coef.1se <- coef.1se[which(coef.1se !=0),] 
+coef.1se
+rownames(as.matrix(coef.1se))
+
+# use lambda values from above to
+fit2.lasso <- glmnet(X2, Y2, alpha=1, lambda=fit2.cv$lambda.1se)
+variables.final <- coef(fit2.lasso)
+variables.final <- variables.final[which(variables.final !=0),]
+variables.final <- rownames(as.matrix(variables.final))
+variables.final
+
+# join together the extracted betas for the final model
+fit_formula = as.formula(paste("violentcrimes.perpop", "~", paste(variables.final[-1], collapse = "+")))
+fit.final = lm(fit_formula, data=comb.data)
+summary(fit.final) 
+```
+
+
+The predicted formula generated through the LASSO model (reading from the summary provided above) is violentcrimes.perpop = 2012.95 + 12.96(race.pctblack) - 22.68(pct.kids2parents) + 94.95(pct.kids.nvrmarried). 
+
+### Cross validating lambdas and alphas
+
+
+We now loop through 20 different values of alpha and lambdas and compare CVMs, choosing only the final model with the lowest CVM.
+
+```{r}
+Xb <- model.matrix(violentcrimes.perpop~., comb.data)[,-1]
+Yb <- comb.data[, 98]
+
+# test alpha values
+alpha <- seq(0, 1, .05)
+results <- data.frame()
+
+for(i in 1:21){
+  # 10 folds of CV each iteration
+ temp_model<- cv.glmnet(Xb, Yb, alpha = alpha[i], family="gaussian", nfolds = 10, type.measure = "deviance") 
+ pos<-which(temp_model$lambda==temp_model$lambda.1se)
+ # store alpha, CVM pairs for easy reporting
+ results[i,1] <- alpha[i]
+ results[i,2] <- temp_model$cvm[pos]
+}
+
+pos.cvm<-which.min(results[,2])
+cvm_final<-results[pos.cvm,2]
+cvm_final
+alpha_final<-results[pos.cvm,1]
+alpha_final
+```
+
+
+We can see that the best model results (averaged over a series of iterations) with an alpha value of 0.85 (and corresponding CVM of 158220).
+
+Below are our outputs based on the model we found above by crossvalidating the alphas and lambdas
+```{r}
+fit_alpha_final <- cv.glmnet(Xb, Yb, alpha = alpha_final, family="gaussian", nfolds = 10, type.measure = "deviance") 
+fit_alpha_final$lambda.1se
+coef_alpha_final.1se <- coef(fit_alpha_final, s="lambda.1se") 
+coef_alpha_final.1se <- coef_alpha_final.1se[which(coef_alpha_final.1se !=0),] 
+coef_alpha_final.1se
+rownames(as.matrix(coef_alpha_final.1se))
+```
+
+Below we create an OLS model using the variables from the model determined through LASSO.
+```{r}
+fitQ2.lm<-lm(fit_formula, data=comb.data)
+summary(fitQ2.lm)
+```
+Finally, we can see that the results in both types of models are significant at the 0.001 level, and that the OLS model is remarkably similar to the crossvalidated model generated with the best fit version of alpha.
+
+
+
+
